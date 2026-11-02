@@ -40,7 +40,7 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
     return function (view) {
         var $ = function (sel) { return view.querySelector(sel); };
         var $$ = function (sel) { return Array.prototype.slice.call(view.querySelectorAll(sel)); };
-        var timer = null, tab = 'status', config = null, libs = null, status = null;
+        var timer = null, tab = 'status', config = null, libs = null, status = null, libDraft = null;
         var logAfter = 0, logLines = [];
 
         // ---- tabs ---------------------------------------------------------------
@@ -96,7 +96,9 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
         }
         function renderLibs() {
             if (!libs || !config) { return; }
-            var sel = selectedIds(config), counts = (status && status.counts) || {};
+            // The ticks being edited (the table is redrawn every few seconds with fresh counts).
+            if (!libDraft) { libDraft = selectedIds(config); }
+            var sel = libDraft, counts = (status && status.counts) || {};
             $('#smiLibs').innerHTML = libs.map(function (l) {
                 var k = counts[l.id] || {};
                 return '<tr><td><input type="checkbox" class="smi-lib" data-id="' + esc(l.id) + '"' + (sel.indexOf(l.id) >= 0 ? ' checked' : '') + ' /></td>' +
@@ -110,15 +112,22 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
         }
         function loadLibs() {
             return Promise.all([getJson('strminfo/libraries'), fetchConfig()]).then(function (r) {
-                libs = r[0]; config = r[1]; renderLibs();
+                libs = r[0]; config = r[1]; libDraft = selectedIds(config); renderLibs();
             });
         }
+        $('#smiLibs').addEventListener('change', function (e) {
+            var t = e.target;
+            if (!t.classList || !t.classList.contains('smi-lib')) { return; }
+            var id = t.getAttribute('data-id');
+            libDraft = (libDraft || []).filter(function (x) { return x !== id; });
+            if (t.checked) { libDraft.push(id); }
+        });
         $('#smiCount').addEventListener('click', function () {
             postJson('strminfo/count').then(function () { toast('Counting… this can take a minute on big libraries.'); setTimeout(loadStatus, 500); });
         });
         $('#smiLibSave').addEventListener('click', function () {
             fetchConfig().then(function (c) {
-                c.LibraryIds = $$('.smi-lib').filter(function (x) { return x.checked; }).map(function (x) { return x.getAttribute('data-id'); }).join(',');
+                c.LibraryIds = (libDraft || []).join(',');
                 saveConfig(c, c.LibraryIds ? 'Saved.' : 'Saved. No libraries are selected, so runs will do nothing.');
             });
         });
