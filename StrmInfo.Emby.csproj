@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>StrmInfo.Emby</AssemblyName>
+    <RootNamespace>StrmInfo</RootNamespace>
+    <Version>1.0.0</Version>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Folder with MediaBrowser.Common/Controller/Model.dll from an Emby server (see README). -->
+    <EmbySdkDir Condition="'$(EmbySdkDir)' == ''">$(MSBuildProjectDirectory)/emby-sdk</EmbySdkDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="test/**" />
+    <Reference Include="MediaBrowser.Common"><HintPath>$(EmbySdkDir)/MediaBrowser.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Controller"><HintPath>$(EmbySdkDir)/MediaBrowser.Controller.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Model"><HintPath>$(EmbySdkDir)/MediaBrowser.Model.dll</HintPath><Private>false</Private></Reference>
+    <EmbeddedResource Include="src/Web/strminfo.html" LogicalName="StrmInfo.Web.strminfo.html" />
+    <EmbeddedResource Include="src/Web/strminfo.js" LogicalName="StrmInfo.Web.strminfo.js" />
+    <EmbeddedResource Include="src/Web/thumb.png" LogicalName="StrmInfo.Web.thumb.png" />
+  </ItemGroup>
+</Project>

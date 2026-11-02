@@ -1,0 +1,177 @@
+<div id="strminfoPage" data-role="page" class="page type-interior pluginConfigurationPage smi" data-title="strminfo"
+     data-require="emby-input,emby-button,emby-checkbox,emby-select" data-controller="__plugin/strminfojs">
+<style>
+.smi{--smi-accent:#4fd1c5;--smi-panel:rgba(128,128,128,.10);--smi-line:rgba(128,128,128,.25);--smi-ok:#48bb78;--smi-bad:#f56565;--smi-warn:#ecc94b}
+.smi .smi-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 1.4em;border-bottom:1px solid var(--smi-line)}
+.smi .smi-tab{background:none;border:0;color:inherit;opacity:.65;padding:.7em 1em;font:inherit;cursor:pointer;position:relative}
+.smi .smi-tab:hover{opacity:1}
+.smi .smi-tab.on{opacity:1;font-weight:600}
+.smi .smi-tab.on::after{content:"";position:absolute;left:1em;right:1em;bottom:-1px;height:3px;border-radius:2px;background:var(--smi-accent);box-shadow:0 0 10px rgba(79,209,197,.55)}
+.smi .smi-pane{display:none}.smi .smi-pane.on{display:block}
+.smi .smi-card{background:var(--smi-panel);border:1px solid var(--smi-line);border-radius:10px;padding:1.1em 1.3em;margin-bottom:1.1em;overflow-wrap:anywhere}
+.smi .smi-card h3{margin:0 0 .6em;font-size:1em;font-weight:500;opacity:.75}
+.smi .smi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1em;margin-bottom:1.1em}
+.smi .smi-grid .smi-card{margin:0}
+.smi .smi-big{font-size:2em;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.smi .smi-phase{font-size:2.2em;font-weight:700;line-height:1.1}
+.smi .smi-muted{opacity:.7}
+.smi .smi-small{font-size:.85em}
+.smi .smi-row{display:flex;gap:.8em;align-items:center;flex-wrap:wrap}
+.smi .smi-between{justify-content:space-between;align-items:flex-start}
+.smi .smi-bar{position:relative;height:30px;margin:1.1em 0 .5em;border-radius:6px;overflow:hidden;background:rgba(128,128,128,.18)}
+.smi .smi-fill{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,#2c9c92,var(--smi-accent));transition:width .6s ease}
+.smi .smi-bar.running .smi-fill{background-image:repeating-linear-gradient(-45deg,rgba(255,255,255,.12) 0 10px,transparent 10px 20px),linear-gradient(90deg,#2c9c92,var(--smi-accent));background-size:28px 28px,auto;animation:smi-stripes 1s linear infinite}
+@keyframes smi-stripes{to{background-position:28px 0,0 0}}
+.smi .smi-wave{display:flex;gap:3px;align-items:flex-end;height:1em;margin-right:.5em}
+.smi .smi-wave i{width:3px;background:var(--smi-accent);border-radius:2px;height:30%;opacity:.5}
+.smi .smi-wave.busy i{opacity:1;animation:smi-wave 1s ease-in-out infinite}
+.smi .smi-wave.busy i:nth-child(2){animation-delay:.15s}.smi .smi-wave.busy i:nth-child(3){animation-delay:.3s}.smi .smi-wave.busy i:nth-child(4){animation-delay:.45s}
+@keyframes smi-wave{0%,100%{height:25%}50%{height:100%}}
+@media (prefers-reduced-motion:reduce){.smi *{animation:none!important;transition:none!important}}
+.smi .smi-log{background:rgba(128,128,128,.12);border:1px solid var(--smi-line);border-radius:8px;font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;padding:.6em .9em;overflow:auto}
+.smi .smi-log .WARNING{color:var(--smi-warn)}.smi .smi-log .ERROR{color:var(--smi-bad)}
+.smi #smiLog{height:62vh}
+.smi table{width:100%;border-collapse:collapse}
+.smi th,.smi td{text-align:left;padding:.5em .6em;border-bottom:1px solid var(--smi-line);vertical-align:middle}
+.smi th{font-weight:500;opacity:.7;white-space:nowrap}
+.smi td.num,.smi th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.smi .smi-tablewrap{overflow-x:auto}
+.smi .smi-badge{display:inline-block;font-size:.75em;padding:.1em .6em;border-radius:99px;border:1px solid var(--smi-line);white-space:nowrap}
+.smi .smi-badge.ok{background:rgba(72,187,120,.18);border-color:rgba(72,187,120,.5)}
+.smi .smi-badge.failed{background:rgba(245,101,101,.18);border-color:rgba(245,101,101,.5)}
+.smi .smi-badge.timeout{background:rgba(236,201,75,.18);border-color:rgba(236,201,75,.5)}
+.smi .smi-alert{border:1px solid var(--smi-line);border-left:4px solid var(--smi-accent);background:var(--smi-panel);border-radius:8px;padding:.8em 1em;margin-bottom:1.1em}
+.smi .smi-alert.bad{border-left-color:var(--smi-bad)}.smi .smi-alert.warn{border-left-color:var(--smi-warn)}
+.smi .smi-num-ok{color:var(--smi-ok)}.smi .smi-num-bad{color:var(--smi-bad)}.smi .smi-num-warn{color:var(--smi-warn)}
+.smi .smi-current{list-style:none;margin:.3em 0 0;padding:0}
+.smi .smi-current li{padding:.2em 0}
+.smi .smi-current li::before{content:"▸ ";color:var(--smi-accent)}
+.smi .smi-paths{font-size:.85em;opacity:.7}
+</style>
+<div data-role="content">
+<div class="content-primary">
+
+  <div class="smi-row smi-between" style="margin-bottom:.4em">
+    <h1 style="margin:0">strminfo</h1>
+    <div class="smi-row smi-small"><span class="smi-wave" id="smiWave"><i></i><i></i><i></i><i></i></span><span id="smiPill">Connecting</span></div>
+  </div>
+  <p class="smi-muted" style="margin-top:0">Media info for .strm items: resolution, codecs, audio tracks and runtime, read straight from the stream without refreshing metadata.</p>
+
+  <div class="smi-tabs">
+    <button type="button" class="smi-tab on" data-tab="status">Status</button>
+    <button type="button" class="smi-tab" data-tab="libraries">Libraries</button>
+    <button type="button" class="smi-tab" data-tab="settings">Settings</button>
+    <button type="button" class="smi-tab" data-tab="failures">Failed</button>
+    <button type="button" class="smi-tab" data-tab="log">Log</button>
+  </div>
+
+  <!-- Status -->
+  <div class="smi-pane on" data-pane="status">
+    <div id="smiAlerts"></div>
+    <div class="smi-card">
+      <div class="smi-row smi-between">
+        <div>
+          <h3>Media info run</h3>
+          <div class="smi-phase" id="smiPhase">…</div>
+          <div id="smiDetail" class="smi-muted" style="margin-top:.3em"></div>
+        </div>
+        <div class="smi-row">
+          <button is="emby-button" type="button" class="raised button-submit" id="smiRun"><span>Run now</span></button>
+          <button is="emby-button" type="button" class="raised" id="smiStop" style="display:none"><span>Stop</span></button>
+        </div>
+      </div>
+      <div class="smi-bar" id="smiBar"><div class="smi-fill" id="smiFill"></div></div>
+      <div id="smiMeta" class="smi-muted smi-small"></div>
+      <div id="smiCurrentWrap" style="display:none;margin-top:.8em"><span class="smi-muted smi-small">Now probing</span><ul class="smi-current" id="smiCurrent"></ul></div>
+    </div>
+    <div class="smi-grid" id="smiCards"></div>
+    <div class="smi-card">
+      <h3>Recent results</h3>
+      <div class="smi-tablewrap"><table><thead><tr><th>When</th><th>Item</th><th>Result</th><th>Details</th></tr></thead><tbody id="smiRecent"></tbody></table></div>
+      <div id="smiRecentEmpty" class="smi-muted smi-small">Nothing probed yet.</div>
+    </div>
+  </div>
+
+  <!-- Libraries -->
+  <div class="smi-pane" data-pane="libraries">
+    <div class="smi-card">
+      <div class="smi-row smi-between">
+        <div>
+          <h3>Libraries in scope</h3>
+          <div class="smi-muted smi-small">Only items in the ticked libraries are probed. The counts use the item types chosen on the Settings tab.</div>
+        </div>
+        <button is="emby-button" type="button" class="raised" id="smiCount"><span>Count items</span></button>
+      </div>
+      <div class="smi-tablewrap" style="margin-top:1em"><table>
+        <thead><tr><th></th><th>Library</th><th>Type</th><th class="num">Items</th><th class="num">Need media info</th><th class="num">Failed recently</th></tr></thead>
+        <tbody id="smiLibs"></tbody>
+      </table></div>
+      <div id="smiCountNote" class="smi-muted smi-small" style="margin-top:.6em"></div>
+    </div>
+    <button is="emby-button" type="button" class="raised button-submit block" id="smiLibSave"><span>Save</span></button>
+  </div>
+
+  <!-- Settings -->
+  <div class="smi-pane" data-pane="settings">
+    <form id="smiSettingsForm">
+      <div class="verticalSection">
+        <h2>What to probe</h2>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="IncludeMovies" /><span>Movies</span></label>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="IncludeEpisodes" /><span>TV episodes</span></label>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="IncludeOtherVideos" /><span>Other videos (music videos, home videos)</span></label>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="StrmOnly" /><span>Only .strm items</span></label>
+        <div class="fieldDescription" style="margin-bottom:1em">Items that already have media info are always skipped. Turn off "Only .strm items" to also probe regular files that are missing it.</div>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="NewestFirst" /><span>Newest items first</span></label>
+      </div>
+      <div class="verticalSection">
+        <h2>Pace</h2>
+        <div class="inputContainer"><input is="emby-input" type="number" min="1" max="10" step="1" id="Concurrency" label="Probes at the same time" /><div class="fieldDescription">Each probe opens one stream. Keep this below your provider's connection limit, minus what you need for watching. 1 is safest.</div></div>
+        <div class="inputContainer"><input is="emby-input" type="number" min="5" step="1" id="TimeoutSeconds" label="Timeout (seconds)" /><div class="fieldDescription">A probe that hasn't answered by then is stopped (its connection is closed) and the item is marked as timed out.</div></div>
+        <div class="inputContainer"><input is="emby-input" type="number" min="0" step="100" id="DelayMs" label="Pause after each probe (milliseconds)" /><div class="fieldDescription">Gives the provider a moment between streams.</div></div>
+        <div class="inputContainer"><input is="emby-input" type="text" id="UserAgent" label="User agent" /><div class="fieldDescription">Sent with each probe. Some providers only accept known players.</div></div>
+      </div>
+      <div class="verticalSection">
+        <h2>Limits</h2>
+        <div class="inputContainer"><input is="emby-input" type="number" min="0" step="1" id="MaxItemsPerRun" label="Stop after this many items (0 = no limit)" /></div>
+        <div class="inputContainer"><input is="emby-input" type="number" min="0" step="1" id="MaxRunMinutes" label="Stop after this many minutes (0 = no limit)" /><div class="fieldDescription">Handy for a nightly window: the next run carries on where this one stopped.</div></div>
+        <div class="inputContainer"><input is="emby-input" type="number" min="0" step="1" id="StopAfterFailuresInRow" label="Stop when this many probes in a row fail (0 = never)" /><div class="fieldDescription">Usually means the provider is down or refusing connections; no point hammering it.</div></div>
+        <div class="inputContainer"><input is="emby-input" type="number" min="0" step="1" id="RetryFailedAfterDays" label="Try failed items again after (days)" /><div class="fieldDescription">0 tries them at every run. The Failed tab lists them.</div></div>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="PauseDuringLibraryScan" /><span>Wait while an Emby library scan is running</span></label>
+      </div>
+      <div class="verticalSection">
+        <h2>Extras</h2>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="ProbeNewItems" /><span>Probe new items soon after Emby adds them</span></label>
+        <div class="fieldDescription" style="margin-bottom:1em">Within a couple of minutes of a scan adding items to a selected library. Uses the same pace settings.</div>
+        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="ExtractChapters" /><span>Also read chapter markers</span></label>
+        <div class="fieldDescription">To run on a schedule, add a trigger to "Extract media info (strminfo)" under <a is="emby-linkbutton" class="button-link" href="#!/scheduledtasks">Scheduled Tasks</a>.</div>
+      </div>
+      <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+    </form>
+  </div>
+
+  <!-- Failures -->
+  <div class="smi-pane" data-pane="failures">
+    <div class="smi-card">
+      <div class="smi-row smi-between">
+        <div>
+          <h3>Items that failed</h3>
+          <div class="smi-muted smi-small">These are skipped until the retry period on the Settings tab has passed.</div>
+        </div>
+        <button is="emby-button" type="button" class="raised" id="smiClear"><span>Try them again next run</span></button>
+      </div>
+      <div class="smi-tablewrap" style="margin-top:1em"><table>
+        <thead><tr><th>Last tried</th><th>Item</th><th class="num">Attempts</th><th>Reason</th></tr></thead>
+        <tbody id="smiFails"></tbody>
+      </table></div>
+      <div id="smiFailsEmpty" class="smi-muted smi-small" style="margin-top:.6em">No failed items.</div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="smi-pane" data-pane="log">
+    <div class="smi-log" id="smiLog"></div>
+  </div>
+
+</div>
+</div>
+</div>
