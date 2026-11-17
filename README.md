@@ -15,9 +15,9 @@ Emby normally fills in media info for a `.strm` item the first time it's played,
 - **Pace:** probes at the same time (1 by default), timeout, a pause after each probe, and the user agent sent to the provider.
 - **Limits:** stop a run after a number of items or minutes (a nightly window carries on where it stopped next time), stop when too many probes fail in a row (provider down or at its connection limit), and wait while an Emby library scan is running.
 - **Failed items** are listed with the reason and skipped until a retry period has passed (7 days by default). Clear the list to try them all again.
-- **New items:** optionally probe items soon after a scan adds them.
+- **New items:** optionally probe items soon after a scan adds them. These runs go through the same scheduled task, so they show in Scheduled Tasks and Emby's activity indicator with progress and a stop button. If a run stops early (failures in a row, the minute limit, or **Stop**), the items it didn't get to stay queued and are tried again later: after 15 minutes when probes kept failing, 5 minutes after the minute limit, an hour after **Stop**. The Status tab shows how many are waiting and when the next try is.
 - **Live page** in the dashboard: progress, time left, what's being probed right now, recent results, failures and a log.
-- **Scheduled task** "Extract media info (strminfo)". It has no schedule by default; add a trigger under Scheduled Tasks, or use **Run now** on the page.
+- **Scheduled task** "Extract media info (strminfo)". It has no schedule by default; add a trigger under Scheduled Tasks (a daily one also picks up anything a stopped run left behind), or use **Run now** on the page.
 - Items that already have media info are always skipped, newest items first by default.
 - Stream URLs are never shown in full on the page or in the log (only the scheme and host), since they usually contain the provider login.
 

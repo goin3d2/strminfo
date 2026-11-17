@@ -178,7 +178,12 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
                     ['Skipped', fmtN(src.skipped), 'already had media info'],
                     ['On the Failed list', fmtN(s.failures), '<a href="#" data-go="failures" class="button-link">See them</a>'],
                 ];
-                if (s.new_waiting) { cards.push(['New items waiting', fmtN(s.new_waiting), 'probed within a couple of minutes']); }
+                if (s.new_waiting) {
+                    var later = s.new_not_before && s.new_not_before > now;
+                    cards.push(['New items waiting', fmtN(s.new_waiting), later
+                        ? 'tried again at ' + new Date(s.new_not_before * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                        : 'probed within a couple of minutes']);
+                }
                 $('#smiCards').innerHTML = cards.map(function (c) {
                     return '<div class="smi-card"><h3>' + c[0] + '</h3><div class="smi-big">' + c[1] + '</div><div class="smi-muted smi-small">' + c[2] + '</div></div>';
                 }).join('');

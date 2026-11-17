@@ -15,7 +15,7 @@ namespace StrmInfo.Tasks
         public string Category => "strminfo";
 
         public Task Execute(CancellationToken cancellationToken, IProgress<double> progress) =>
-            Plugin.Instance.Engine.RunAsync(progress, cancellationToken);
+            Plugin.Instance.Engine.RunTaskAsync(progress, cancellationToken);
 
         // No schedule by default: run it from the strminfo page, or add a trigger in Scheduled Tasks.
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => new TaskTriggerInfo[0];

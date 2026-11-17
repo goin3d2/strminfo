@@ -52,6 +52,10 @@ namespace StrmInfo.Engine
         readonly Dictionary<string, object> _failures;
         readonly HashSet<long> _newItems = new HashSet<long>();
         Timer _newTimer;
+        long _newNotBefore;            // don't start a new-item run before this (after a stop)
+        List<long> _newBatch;          // batch handed to the scheduled task, so it shows in Emby
+        /// <summary>Set at startup: queues the "Extract media info" task in Emby's task manager.</summary>
+        public Action QueueTask;
 
         public ProbeEngine(ILibraryManager lib, IItemRepository repo, IMediaProbeManager probe,
                            Func<PluginConfiguration> config, string dataDir, Action<string, string> forwardLog)
@@ -179,6 +183,7 @@ namespace StrmInfo.Engine
             if (!await _running.WaitAsync(0).ConfigureAwait(false))
             {
                 Log.Info("A run is already going");
+                if (onlyIds != null && onlyIds.Count > 0) Requeue(onlyIds, 60, "a run was already going");
                 return;
             }
             var c = _config();
@@ -189,6 +194,8 @@ namespace StrmInfo.Engine
                 _done = _total = _ok = _failed = _timedOut = _skipped = 0; _started = Store.Now(); _current.Clear();
             }
             var runStart = DateTime.UtcNow;
+            ConcurrentQueue<long> queue = null;
+            var unfinished = new ConcurrentBag<long>();
             try
             {
                 var now = Store.Now();
@@ -220,7 +227,7 @@ namespace StrmInfo.Engine
                 var workers = Math.Max(1, Math.Min(10, c.Concurrency));
                 var timeout = TimeSpan.FromSeconds(Math.Max(5, c.TimeoutSeconds));
                 Log.Info($"Probing {ids.Count} items, {workers} at a time, {timeout.TotalSeconds:0}s timeout");
-                var queue = new ConcurrentQueue<long>(ids);
+                queue = new ConcurrentQueue<long>(ids);
                 var deadline = c.MaxRunMinutes > 0 ? runStart.AddMinutes(c.MaxRunMinutes) : (DateTime?)null;
                 int streak = 0;
                 var lastLog = DateTime.UtcNow;
@@ -244,7 +251,7 @@ namespace StrmInfo.Engine
                         if (cts.IsCancellationRequested) return;
 
                         var (result, name, detail) = await ProbeOne(id, c, timeout, cts.Token).ConfigureAwait(false);
-                        if (result == "cancelled") return;
+                        if (result == "cancelled") { unfinished.Add(id); return; }
                         bool stopNow = false;
                         lock (_lock)
                         {
@@ -296,6 +303,18 @@ namespace StrmInfo.Engine
             finally
             {
                 SaveFailures();
+                if (onlyIds != null && (queue != null || !unfinished.IsEmpty))
+                {
+                    var rest = new List<long>(unfinished);
+                    if (queue != null) while (queue.TryDequeue(out var left)) rest.Add(left);
+                    string why;
+                    lock (_lock) why = _stopReason ?? "stopped";
+                    // After a run of failures the provider is likely busy: wait a while before retrying.
+                    var delay = why.Contains("in a row failed") ? 15 * 60
+                              : why.Contains("stopped from the page") ? 60 * 60
+                              : why.Contains("-minute limit") ? 5 * 60 : 10 * 60;
+                    try { Requeue(rest, delay, why); } catch (Exception e) { Log.Error("Couldn't keep the unprobed items: " + e.Message); }
+                }
                 lock (_lock)
                 {
                     var secs = (long)(DateTime.UtcNow - runStart).TotalSeconds;
@@ -505,9 +524,26 @@ namespace StrmInfo.Engine
             if (IsRunning) return;
             var c = _config();
             if (c.PauseDuringLibraryScan && _lib.IsScanRunning) return;
+            if (Store.Now() < Interlocked.Read(ref _newNotBefore)) return;
             List<long> ids;
-            lock (_newItems) { if (_newItems.Count == 0) return; ids = _newItems.ToList(); _newItems.Clear(); }
+            lock (_newItems)
+            {
+                if (_newItems.Count == 0 || _newBatch != null) return;
+                ids = _newItems.ToList(); _newItems.Clear();
+            }
             Log.Info($"Probing {ids.Count} newly added items");
+            if (QueueTask != null)
+            {
+                // Run it as Emby's "Extract media info (strminfo)" task, so it shows in Scheduled
+                // Tasks and the activity indicator with progress and a stop button.
+                lock (_newItems) _newBatch = ids;
+                try { QueueTask(); return; }
+                catch (Exception e)
+                {
+                    Log.Warn("Couldn't queue the task (" + e.Message + "); running in the background instead");
+                    lock (_newItems) _newBatch = null;
+                }
+            }
             Task.Run(async () =>
             {
                 try { await RunAsync(null, CancellationToken.None, ids).ConfigureAwait(false); }
@@ -516,7 +552,26 @@ namespace StrmInfo.Engine
             });
         }
 
-        public int NewItemsWaiting { get { lock (_newItems) return _newItems.Count; } }
+        public int NewItemsWaiting { get { lock (_newItems) return _newItems.Count + (_newBatch?.Count ?? 0); } }
+
+        /// <summary>What the scheduled task runs: a queued batch of new items if there is one,
+        /// otherwise everything in the selected libraries that needs media info.</summary>
+        public Task RunTaskAsync(IProgress<double> progress, CancellationToken ct)
+        {
+            List<long> batch;
+            lock (_newItems) { batch = _newBatch; _newBatch = null; }
+            return RunAsync(progress, ct, batch);
+        }
+
+        /// <summary>Put items a stopped new-item run didn't get to back in the queue, to try later.</summary>
+        void Requeue(ICollection<long> ids, long delaySeconds, string why)
+        {
+            if (ids.Count == 0) return;
+            lock (_newItems) foreach (var id in ids) _newItems.Add(id);
+            Interlocked.Exchange(ref _newNotBefore, Store.Now() + delaySeconds);
+            Log.Info($"{ids.Count} new items weren't probed ({why}); they're kept and tried again in about {Math.Max(1, delaySeconds / 60)} min");
+            if (_newTimer == null) _newTimer = new Timer(_ => ProbeQueuedNewItems(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        }
 
         // ---- status for the page -----------------------------------------------------------------
 
@@ -535,7 +590,8 @@ namespace StrmInfo.Engine
                     ["timed_out"] = _timedOut, ["skipped"] = _skipped, ["eta"] = eta, ["stopping"] = _stopReason,
                     ["current"] = _current.Values.Cast<object>().ToList(), ["recent"] = _recent.Cast<object>().ToList(),
                     ["last"] = _last, ["counts"] = _counts, ["counted_at"] = _countedAt, ["counting"] = _counting,
-                    ["failures"] = (long)FailureCount, ["new_waiting"] = (long)NewItemsWaiting, ["scan_running"] = _lib.IsScanRunning,
+                    ["failures"] = (long)FailureCount, ["new_waiting"] = (long)NewItemsWaiting,
+                    ["new_not_before"] = Interlocked.Read(ref _newNotBefore), ["scan_running"] = _lib.IsScanRunning,
                 };
             }
         }
