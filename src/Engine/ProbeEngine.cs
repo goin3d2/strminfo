@@ -56,6 +56,9 @@ namespace StrmInfo.Engine
         List<long> _newBatch;          // batch handed to the scheduled task, so it shows in Emby
         /// <summary>Set at startup: queues the "Extract media info" task in Emby's task manager.</summary>
         public Action QueueTask;
+        /// <summary>Set at startup: asks Emby to restart once nobody is using it (Emby's own idle restart).</summary>
+        public Action RequestRestart;
+        bool _memoryStop;
 
         public ProbeEngine(ILibraryManager lib, IItemRepository repo, IMediaProbeManager probe,
                            Func<PluginConfiguration> config, string dataDir, Action<string, string> forwardLog)
@@ -223,6 +226,12 @@ namespace StrmInfo.Engine
                 if (c.MaxItemsPerRun > 0 && ids.Count > c.MaxItemsPerRun) ids = ids.Take(c.MaxItemsPerRun).ToList();
                 lock (_lock) { _total = ids.Count; _phase = "probing"; }
                 if (ids.Count == 0) { Log.Info("Nothing to probe"); return; }
+                if (c.PauseAtMemoryPercent > 0 && MemoryHigh(c, out var high))
+                {
+                    lock (_lock) { _stopReason = high; _memoryStop = true; }
+                    queue = new ConcurrentQueue<long>(ids);
+                    return;
+                }
 
                 var workers = Math.Max(1, Math.Min(10, c.Concurrency));
                 var timeout = TimeSpan.FromSeconds(Math.Max(5, c.TimeoutSeconds));
@@ -231,6 +240,7 @@ namespace StrmInfo.Engine
                 var deadline = c.MaxRunMinutes > 0 ? runStart.AddMinutes(c.MaxRunMinutes) : (DateTime?)null;
                 int streak = 0;
                 var lastLog = DateTime.UtcNow;
+                long probed = 0;
 
                 async Task Worker()
                 {
@@ -287,6 +297,12 @@ namespace StrmInfo.Engine
                             lastLog = DateTime.UtcNow;
                             Log.Info($"Progress: {_done}/{_total}, {_ok} ok, {_failed} failed, {_timedOut} timed out, {_skipped} already had media info");
                         }
+                        if (c.PauseAtMemoryPercent > 0 && Interlocked.Increment(ref probed) % 20 == 0 && MemoryHigh(c, out var why))
+                        {
+                            lock (_lock) { if (_stopReason == null) { _stopReason = why; _memoryStop = true; } }
+                            cts.Cancel();
+                            return;
+                        }
                         if (c.DelayMs > 0 && result != "skipped")
                             await Task.Delay(c.DelayMs, cts.Token).ContinueWith(_ => { }).ConfigureAwait(false);
                     }
@@ -329,11 +345,59 @@ namespace StrmInfo.Engine
                              + (_stopReason != null ? $" (stopped: {_stopReason})" : ""));
                 }
                 try { Store.WriteJson(P("last.json"), _last); } catch { }
+                bool memoryStop;
+                lock (_lock) { memoryStop = _memoryStop; _memoryStop = false; }
+                if (memoryStop) AfterMemoryStop(onlyIds == null);
                 cts.Dispose();
                 _running.Release();
             }
             ct.ThrowIfCancellationRequested();
         }
+
+        bool MemoryHigh(PluginConfiguration c, out string why)
+        {
+            why = null;
+            var m = Memory.Read();
+            if (m == null || m.Value.limit <= 0) return false;
+            var pct = 100.0 * m.Value.used / m.Value.limit;
+            if (pct < Math.Min(95, Math.Max(30, c.PauseAtMemoryPercent))) return false;
+            why = $"Emby is using {Memory.Gb(m.Value.used)} of {Memory.Gb(m.Value.limit)} ({pct:0}%)";
+            return true;
+        }
+
+        static object MemoryInfo()
+        {
+            var m = Memory.Read();
+            if (m == null || m.Value.limit <= 0) return null;
+            return new Dictionary<string, object> { ["used"] = m.Value.used, ["limit"] = m.Value.limit };
+        }
+
+        /// <summary>A run paused for memory: ask Emby to restart when idle, and carry on after it.</summary>
+        void AfterMemoryStop(bool libraries)
+        {
+            try
+            {
+                if (libraries) Store.WriteJson(P("resume.json"), new Dictionary<string, object> { ["time"] = Store.Now() });
+                Log.Warn("Paused to keep Emby's memory down: Emby keeps probed items in memory until it restarts. "
+                         + "Asked Emby to restart when nobody is watching" + (libraries ? "; the run carries on after the restart." : "."));
+                RequestRestart?.Invoke();
+            }
+            catch (Exception e) { Log.Error("Couldn't ask Emby to restart: " + e.Message); }
+        }
+
+        /// <summary>At startup: if a run was paused for memory, start it again in a few minutes.</summary>
+        public void ResumeAfterRestart()
+        {
+            var f = P("resume.json");
+            if (!File.Exists(f)) return;
+            var t = ToLong(Json.Get(Store.ReadJson(f), "time"));
+            try { File.Delete(f); } catch { }
+            if (Store.Now() - t > 2 * 86400) return;
+            Log.Info("Emby restarted after a run paused for memory; carrying on in 5 minutes");
+            _resumeTimer = new Timer(_ => { try { QueueTask?.Invoke(); } catch (Exception e) { Log.Error("Couldn't start the run: " + e.Message); } },
+                                     null, TimeSpan.FromMinutes(5), Timeout.InfiniteTimeSpan);
+        }
+        Timer _resumeTimer;
 
         static string ReadStrm(string path)
         {
@@ -591,7 +655,7 @@ namespace StrmInfo.Engine
                     ["current"] = _current.Values.Cast<object>().ToList(), ["recent"] = _recent.Cast<object>().ToList(),
                     ["last"] = _last, ["counts"] = _counts, ["counted_at"] = _countedAt, ["counting"] = _counting,
                     ["failures"] = (long)FailureCount, ["new_waiting"] = (long)NewItemsWaiting,
-                    ["new_not_before"] = Interlocked.Read(ref _newNotBefore), ["scan_running"] = _lib.IsScanRunning,
+                    ["new_not_before"] = Interlocked.Read(ref _newNotBefore), ["scan_running"] = _lib.IsScanRunning, ["memory"] = MemoryInfo(),
                 };
             }
         }

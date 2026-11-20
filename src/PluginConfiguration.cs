@@ -41,5 +41,13 @@ namespace StrmInfo
         public bool ExtractChapters { get; set; }
         /// <summary>Don't start a run while a library scan is going (and pause between items while one runs).</summary>
         public bool PauseDuringLibraryScan { get; set; }
+
+        /// <summary>
+        /// Emby keeps every item it has probed in memory until it restarts, so a long run can use it
+        /// all up. When Emby's memory passes this share of what it may use (the container's limit,
+        /// or the machine's memory), the run pauses, Emby is asked to restart when nobody is
+        /// watching, and the run carries on after the restart. 0 = never.
+        /// </summary>
+        public int PauseAtMemoryPercent { get; set; } = 75;
     }
 }

@@ -5,7 +5,7 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
     var PHASES = { idle: 'Idle', listing: 'Finding items', probing: 'Probing', 'waiting for library scan': 'Waiting for the library scan' };
     var RESULTS = { ok: 'OK', failed: 'Failed', timeout: 'Timed out' };
     var BOOLS = ['IncludeMovies', 'IncludeEpisodes', 'IncludeOtherVideos', 'StrmOnly', 'NewestFirst', 'PauseDuringLibraryScan', 'ProbeNewItems', 'ExtractChapters'];
-    var NUMS = ['Concurrency', 'TimeoutSeconds', 'DelayMs', 'MaxItemsPerRun', 'MaxRunMinutes', 'StopAfterFailuresInRow', 'RetryFailedAfterDays'];
+    var NUMS = ['Concurrency', 'TimeoutSeconds', 'DelayMs', 'MaxItemsPerRun', 'MaxRunMinutes', 'StopAfterFailuresInRow', 'RetryFailedAfterDays', 'PauseAtMemoryPercent'];
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -183,6 +183,16 @@ define(['loading', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'],
                     cards.push(['New items waiting', fmtN(s.new_waiting), later
                         ? 'tried again at ' + new Date(s.new_not_before * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                         : 'probed within a couple of minutes']);
+                }
+                if (s.memory && s.memory.limit) {
+                    var pct = Math.round(100 * s.memory.used / s.memory.limit);
+                    var lim = (config && config.PauseAtMemoryPercent) || 0;
+                    cards.push(['Emby memory', pct + '%', (s.memory.used / 1073741824).toFixed(1) + ' of ' + (s.memory.limit / 1073741824).toFixed(1) + ' GB' + (lim ? '; runs pause at ' + lim + '%' : '')]);
+                }
+                var lastStop = (s.last && s.last.stopped) || '';
+                if (!busy && lastStop.indexOf('Emby is using') === 0) {
+                    al += '<div class="smi-alert">The last run paused because ' + esc(lastStop.replace(/^Emby/, 'Emby')) + '. Emby restarts when nobody is watching, and the run carries on 5 minutes later.</div>';
+                    $('#smiAlerts').innerHTML = al;
                 }
                 $('#smiCards').innerHTML = cards.map(function (c) {
                     return '<div class="smi-card"><h3>' + c[0] + '</h3><div class="smi-big">' + c[1] + '</div><div class="smi-muted smi-small">' + c[2] + '</div></div>';
