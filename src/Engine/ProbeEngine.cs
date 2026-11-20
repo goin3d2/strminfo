@@ -239,6 +239,9 @@ namespace StrmInfo.Engine
                 queue = new ConcurrentQueue<long>(ids);
                 var deadline = c.MaxRunMinutes > 0 ? runStart.AddMinutes(c.MaxRunMinutes) : (DateTime?)null;
                 int streak = 0;
+                // Shows/movies the current failure streak spans. One show whose episodes the provider
+                // won't stream fails many times in a row; an outage fails across many titles.
+                var streakGroups = new HashSet<long>();
                 var lastLog = DateTime.UtcNow;
                 long probed = 0;
 
@@ -262,6 +265,7 @@ namespace StrmInfo.Engine
 
                         var (result, name, detail) = await ProbeOne(id, c, timeout, cts.Token).ConfigureAwait(false);
                         if (result == "cancelled") { unfinished.Add(id); return; }
+                        var group = result == "ok" || result == "skipped" ? 0 : GroupOf(id);
                         bool stopNow = false;
                         lock (_lock)
                         {
@@ -269,10 +273,10 @@ namespace StrmInfo.Engine
                             _done++;
                             switch (result)
                             {
-                                case "ok": _ok++; streak = 0; break;
+                                case "ok": _ok++; streak = 0; streakGroups.Clear(); break;
                                 case "skipped": _skipped++; break;
-                                case "timeout": _timedOut++; streak++; break;
-                                default: _failed++; streak++; break;
+                                case "timeout": _timedOut++; streak++; streakGroups.Add(group); break;
+                                default: _failed++; streak++; streakGroups.Add(group); break;
                             }
                             if (result != "skipped")
                             {
@@ -282,9 +286,12 @@ namespace StrmInfo.Engine
                                 });
                                 while (_recent.Count > 60) _recent.RemoveLast();
                             }
-                            if (c.StopAfterFailuresInRow > 0 && streak >= c.StopAfterFailuresInRow && _stopReason == null)
+                            // Stop for an outage: the streak covers at least 3 different shows or movies, or is
+                            // far too long to be one broken show.
+                            if (c.StopAfterFailuresInRow > 0 && streak >= c.StopAfterFailuresInRow && _stopReason == null
+                                && (streakGroups.Count >= 3 || streak >= 10 * c.StopAfterFailuresInRow))
                             {
-                                _stopReason = $"{streak} probes in a row failed; the provider may be down or at its connection limit";
+                                _stopReason = $"{streak} probes in a row failed across {streakGroups.Count} titles; the provider may be down or at its connection limit";
                                 stopNow = true;
                             }
                             progress?.Report(_total > 0 ? 100.0 * _done / _total : 100);
@@ -352,6 +359,18 @@ namespace StrmInfo.Engine
                 _running.Release();
             }
             ct.ThrowIfCancellationRequested();
+        }
+
+        /// <summary>The show an episode belongs to (or the item itself), for telling one broken show from an outage.</summary>
+        long GroupOf(long id)
+        {
+            try
+            {
+                var item = _lib.GetItemById(id);
+                if (item is MediaBrowser.Controller.Entities.TV.Episode e && e.SeriesId != 0) return e.SeriesId;
+            }
+            catch { }
+            return id;
         }
 
         bool MemoryHigh(PluginConfiguration c, out string why)
